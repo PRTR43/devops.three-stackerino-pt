@@ -23,10 +23,16 @@ const pagina = (corpo) => `
 `
 
 app.get("/", async (req, res) => {
-  let response
+  let response, responseStats
   try {
-    // O servidor FRONTEND chama o servidor BACKEND (chamada entre serviços)
-    response = await fetch(`${backendUrl}/api/mensagens`)
+    // Chamada em paralelo ao backend para as mensagens e para as estatísticas
+    const [resMsg, resStats] = await Promise.all([
+      fetch(`${backendUrl}/api/mensagens`),
+      fetch(`${backendUrl}/api/estatisticas`)
+    ])
+    
+    response = resMsg
+    responseStats = resStats
   } catch (err) {
     console.error(`Não foi possível contactar o backend em ${backendUrl}:`, err.message)
     return res.status(502).send(pagina(`
@@ -38,6 +44,7 @@ app.get("/", async (req, res) => {
   }
 
   const data = await response.json()
+  const dataStats = await responseStats.json()
 
   if (!response.ok) {
     // O backend respondeu, mas foi a BASE DE DADOS que falhou
@@ -55,17 +62,18 @@ app.get("/", async (req, res) => {
     .join("")
 
   res.send(pagina(`
-    <h1>🖥️ Mural do Three-Stackerino</h1>
-    <p>Frontend ✅ → Backend ✅ → Base de dados ✅</p>
-    <form method="POST" action="/mensagens" style="background: #eef; padding: 16px; border-radius: 8px;">
-      <input name="autor" placeholder="O teu nome" maxlength="50" required>
-      <input name="texto" placeholder="Escreve uma mensagem" maxlength="280" required size="35">
-      <button>Publicar</button>
-    </form>
-    <ul>${lista || "<li>Ainda não há mensagens.</li>"}</ul>
-    <p>Respondido pelo backend número <b>${escapar(data.backend_number)}</b>
-       (hostname <code>${escapar(data.backend_hostname)}</code>)</p>
-  `))
+      <h1>🖥️ Mural do Three-Stackerino</h1>
+      <p>Frontend ✅ → Backend ✅ → Base de dados ✅</p>
+      <p><b>Total de mensagens: ${dataStats.total_mensagens}</b></p>
+      <form method="POST" action="/mensagens" style="background: #eee; padding: 16px; border-radius: 8px;">
+        <input name="autor" placeholder="O teu nome" maxlength="50" required>
+        <input name="texto" placeholder="Escreve uma mensagem" maxlength="280" required size="35">
+        <button>Publicar</button>
+      </form>
+      <ul>${lista || "<li>Ainda não há mensagens.</li>"}</ul>
+      <p>Respondido pelo backend número <b>${escapar(data.backend_number)}</b> 
+      || (hostname <code>${escapar(data.backend_hostname)}</code>)</p>
+    `))
 })
 
 app.post("/mensagens", async (req, res) => {
